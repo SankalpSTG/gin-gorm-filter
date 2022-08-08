@@ -117,12 +117,29 @@ func (s *TestSuite) TestFiltersSearchable() {
 	ctx := gin.Context{}
 	ctx.Request = &http.Request{
 		URL: &url.URL{
-			RawQuery: "search=John",
+			RawQuery: "search=UserName[c]:John",
 		},
 	}
 
-	s.mock.ExpectQuery(`^SELECT \* FROM "users" WHERE \("Username" LIKE \$1 OR "FullName" LIKE \$2\)`).
-		WithArgs("%John%", "%John%").
+	s.mock.ExpectQuery(`^SELECT \* FROM "users" WHERE "Username" LIKE \$1 ORDER BY "id" DESC LIMIT 10`).
+		WithArgs("%John%").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "Username", "FullName", "Email", "Password"}))
+	err := s.db.Model(&User{}).Scopes(FilterByQuery(&ctx, ALL)).Find(&users).Error
+	s.NoError(err)
+}
+
+// TestFiltersSearchable is a test suite for searchable filters functionality.
+func (s *TestSuite) TestFiltersSearchableCaseSensitive() {
+	var users []User
+	ctx := gin.Context{}
+	ctx.Request = &http.Request{
+		URL: &url.URL{
+			RawQuery: "search=UserName[c]:John|Fullname[i]:Superman",
+		},
+	}
+
+	s.mock.ExpectQuery(`^SELECT \* FROM "users" WHERE \("Username" LIKE \$1 OR LOWER\("FullName"\) LIKE \$2\) ORDER BY "id" DESC LIMIT 10`).
+		WithArgs("%John%", "%superman%").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "Username", "FullName", "Email", "Password"}))
 	err := s.db.Model(&User{}).Scopes(FilterByQuery(&ctx, ALL)).Find(&users).Error
 	s.NoError(err)
